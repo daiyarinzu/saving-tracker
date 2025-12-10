@@ -7,6 +7,9 @@ import {
   onSnapshot,
   query,
   orderBy,
+  deleteDoc,
+  doc,
+  updateDoc,
 } from "firebase/firestore";
 
 function App() {
@@ -14,15 +17,22 @@ function App() {
   const [contributions, setContributions] = useState([]);
   const [selectedMember, setSelectedMember] = useState("");
   const [amount, setAmount] = useState("");
+  const [contributionDate, setContributionDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [newMemberName, setNewMemberName] = useState("");
   const [addingMember, setAddingMember] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [uploading, setUploading] = useState(false);
-
-  // Monthly report states
   const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
+  const [editingMember, setEditingMember] = useState(null);
+  const [editMemberName, setEditMemberName] = useState("");
+  const [editingContribution, setEditingContribution] = useState(null);
+  const [editContribAmount, setEditContribAmount] = useState("");
+  const [editContribImage, setEditContribImage] = useState(null);
+  const [filterName, setFilterName] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
 
   const CLOUDINARY_CLOUD_NAME = "drvx9vxpc";
   const CLOUDINARY_UPLOAD_PRESET = "savings_tracker";
@@ -55,11 +65,11 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Set current month and year on load
   useEffect(() => {
     const now = new Date();
     setSelectedMonth(String(now.getMonth() + 1));
     setSelectedYear(String(now.getFullYear()));
+    setContributionDate(now.toISOString().split("T")[0]);
   }, []);
 
   const totalSavings = contributions.reduce(
@@ -73,7 +83,6 @@ function App() {
       .reduce((sum, contrib) => sum + contrib.amount, 0);
   };
 
-  // Get contributions for a specific month
   const getMonthlyContributions = (month, year) => {
     return contributions.filter((contrib) => {
       const contribDate = contrib.timestamp?.toDate
@@ -86,7 +95,6 @@ function App() {
     });
   };
 
-  // Get member's total for specific month
   const getMemberMonthlyTotal = (memberName, month, year) => {
     const monthlyContribs = getMonthlyContributions(month, year);
     return monthlyContribs
@@ -94,7 +102,6 @@ function App() {
       .reduce((sum, contrib) => sum + contrib.amount, 0);
   };
 
-  // Generate monthly report
   const generateMonthlyReport = () => {
     if (!selectedMonth || !selectedYear) return null;
 
@@ -163,6 +170,37 @@ function App() {
     }
   };
 
+  const handleDeleteMember = async (memberId, memberName) => {
+    if (!confirm(`Are you sure you want to delete ${memberName}?`)) return;
+
+    try {
+      await deleteDoc(doc(db, "members", memberId));
+      alert("Member deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting member:", error);
+      alert("Error deleting member. Please try again.");
+    }
+  };
+
+  const handleEditMember = async (memberId) => {
+    if (!editMemberName.trim()) {
+      alert("Please enter a member name");
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "members", memberId), {
+        name: editMemberName.trim(),
+      });
+      setEditingMember(null);
+      setEditMemberName("");
+      alert("Member updated successfully!");
+    } catch (error) {
+      console.error("Error updating member:", error);
+      alert("Error updating member. Please try again.");
+    }
+  };
+
   const uploadImageToCloudinary = async (file) => {
     const formData = new FormData();
     formData.append("file", file);
@@ -201,17 +239,20 @@ function App() {
         imageUrl = await uploadImageToCloudinary(imageFile);
       }
 
+      const selectedDate = new Date(contributionDate);
+
       await addDoc(collection(db, "contributions"), {
         memberName: selectedMember,
         amount: parseFloat(amount),
-        date: new Date().toLocaleDateString(),
-        timestamp: new Date(),
+        date: selectedDate.toLocaleDateString(),
+        timestamp: selectedDate,
         proofOfPayment: imageUrl,
       });
 
       setSelectedMember("");
       setAmount("");
       setImageFile(null);
+      setContributionDate(new Date().toISOString().split("T")[0]);
       alert("Contribution added successfully!");
     } catch (error) {
       console.error("Error adding contribution:", error);
@@ -222,11 +263,85 @@ function App() {
     }
   };
 
+  const handleDeleteContribution = async (contribId, memberName, amount) => {
+    if (!confirm(`Delete ${memberName}'s contribution of ₱${amount}?`)) return;
+
+    try {
+      await deleteDoc(doc(db, "contributions", contribId));
+      alert("Contribution deleted successfully!");
+    } catch (error) {
+      console.error("Error deleting contribution:", error);
+      alert("Error deleting contribution. Please try again.");
+    }
+  };
+
+  const handleEditContribution = async (contribId) => {
+    if (!editContribAmount || editContribAmount <= 0) {
+      alert("Please enter a valid amount");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      let imageUrl = editingContribution.proofOfPayment;
+      if (editContribImage) {
+        imageUrl = await uploadImageToCloudinary(editContribImage);
+      }
+
+      await updateDoc(doc(db, "contributions", contribId), {
+        amount: parseFloat(editContribAmount),
+        proofOfPayment: imageUrl,
+      });
+
+      setEditingContribution(null);
+      setEditContribAmount("");
+      setEditContribImage(null);
+      alert("Contribution updated successfully!");
+    } catch (error) {
+      console.error("Error updating contribution:", error);
+      alert("Error updating contribution. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setImageFile(e.target.files[0]);
     }
   };
+
+  const handleQuickAmount = (value) => {
+    setAmount(String(value));
+  };
+
+  const filteredContributions = contributions.filter((contrib) => {
+    const nameMatch =
+      !filterName ||
+      contrib.memberName.toLowerCase().includes(filterName.toLowerCase());
+
+    let dateMatch = true;
+    if (filterDateFrom || filterDateTo) {
+      const contribDate = new Date(
+        contrib.timestamp?.toDate
+          ? contrib.timestamp.toDate()
+          : contrib.timestamp
+      );
+      const fromDate = filterDateFrom ? new Date(filterDateFrom) : null;
+      const toDate = filterDateTo ? new Date(filterDateTo) : null;
+
+      if (fromDate && toDate) {
+        dateMatch = contribDate >= fromDate && contribDate <= toDate;
+      } else if (fromDate) {
+        dateMatch = contribDate >= fromDate;
+      } else if (toDate) {
+        dateMatch = contribDate <= toDate;
+      }
+    }
+
+    return nameMatch && dateMatch;
+  });
 
   const monthlyReport = generateMonthlyReport();
 
@@ -246,116 +361,14 @@ function App() {
   ];
 
   return (
-    <div className="App">
-      <h1>Group Savings Tracker</h1>
-      <p>Track contributions for your group staycation fund!</p>
-
-      <h2>Total Savings: ₱{totalSavings}</h2>
-
-      {/* Monthly Report Section */}
-      <div
-        style={{
-          border: "2px solid #2563eb",
-          padding: "20px",
-          marginBottom: "20px",
-          borderRadius: "8px",
-        }}
-      >
-        <h2>📊 Monthly Report</h2>
-        <div>
-          <label>Select Month: </label>
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-          >
-            {monthNames.map((month, index) => (
-              <option key={index} value={index + 1}>
-                {month}
-              </option>
-            ))}
-          </select>
-
-          <label> Year: </label>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(e.target.value)}
-          >
-            {[2024, 2025, 2026].map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {monthlyReport && (
-          <div>
-            <h3>
-              {monthNames[parseInt(selectedMonth) - 1]} {selectedYear} Summary
-            </h3>
-            <p>
-              <strong>Expected Total:</strong> ₱{monthlyReport.expectedTotal}
-            </p>
-            <p>
-              <strong>Collected:</strong> ₱{monthlyReport.totalCollected}
-            </p>
-            <p>
-              <strong>Shortfall:</strong> ₱
-              {monthlyReport.expectedTotal - monthlyReport.totalCollected}
-            </p>
-
-            <h3>Member Status</h3>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ borderBottom: "2px solid #2563eb" }}>
-                  <th style={{ textAlign: "left", padding: "8px" }}>Member</th>
-                  <th style={{ textAlign: "right", padding: "8px" }}>Paid</th>
-                  <th style={{ textAlign: "right", padding: "8px" }}>
-                    Balance
-                  </th>
-                  <th style={{ textAlign: "center", padding: "8px" }}>
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthlyReport.memberReports.map((report, index) => (
-                  <tr key={index} style={{ borderBottom: "1px solid #ddd" }}>
-                    <td style={{ padding: "8px" }}>{report.name}</td>
-                    <td style={{ textAlign: "right", padding: "8px" }}>
-                      ₱{report.paidAmount}
-                    </td>
-                    <td style={{ textAlign: "right", padding: "8px" }}>
-                      ₱{report.balance}
-                    </td>
-                    <td style={{ textAlign: "center", padding: "8px" }}>
-                      <span
-                        style={{
-                          padding: "4px 8px",
-                          borderRadius: "4px",
-                          backgroundColor:
-                            report.status === "Paid Full"
-                              ? "#10b981"
-                              : report.status === "Partial"
-                              ? "#f59e0b"
-                              : "#ef4444",
-                          color: "white",
-                          fontSize: "12px",
-                        }}
-                      >
-                        {report.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+    <div className="dashboard">
+      <div className="card title-card">
+        <h1>💰 Group Savings Tracker</h1>
+        <p>Track contributions for your group staycation fund</p>
       </div>
 
-      <div>
-        <h2>Add New Member</h2>
+      <div className="card add-member-card">
+        <h2>➕ Add New Member</h2>
         <form onSubmit={handleAddMember}>
           <input
             type="text"
@@ -370,8 +383,213 @@ function App() {
         </form>
       </div>
 
-      <div>
-        <h2>Add Contribution</h2>
+      <div className="card members-card">
+        <h2>👥 Members ({members.length})</h2>
+        <div className="scrollable-content">
+          {members.length === 0 ? (
+            <p className="empty-state">No members yet</p>
+          ) : (
+            <ul>
+              {members.map((member) => (
+                <li key={member.id}>
+                  {editingMember === member.id ? (
+                    <div className="edit-form">
+                      <input
+                        type="text"
+                        value={editMemberName}
+                        onChange={(e) => setEditMemberName(e.target.value)}
+                        className="edit-input"
+                      />
+                      <div className="edit-buttons">
+                        <button
+                          onClick={() => handleEditMember(member.id)}
+                          className="btn-save"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingMember(null);
+                            setEditMemberName("");
+                          }}
+                          className="btn-cancel"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="member-info">
+                        <strong>{member.name}</strong>
+                        <span>₱{getMemberTotal(member.name)}</span>
+                      </div>
+                      <div className="member-actions">
+                        <button
+                          onClick={() => {
+                            setEditingMember(member.id);
+                            setEditMemberName(member.name);
+                          }}
+                          className="btn-edit"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleDeleteMember(member.id, member.name)
+                          }
+                          className="btn-delete"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <div className="card history-card">
+        <h2>📜 Recent Contributions</h2>
+
+        <div className="filter-section">
+          <input
+            type="text"
+            placeholder="Filter by name"
+            value={filterName}
+            onChange={(e) => setFilterName(e.target.value)}
+            className="filter-input"
+          />
+          <div className="date-filters">
+            <input
+              type="date"
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+              className="filter-date"
+            />
+            <span>to</span>
+            <input
+              type="date"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+              className="filter-date"
+            />
+          </div>
+        </div>
+
+        <div className="scrollable-content">
+          {filteredContributions.length === 0 ? (
+            <p className="empty-state">No contributions found</p>
+          ) : (
+            <div className="contrib-table">
+              <div className="contrib-header">
+                <span>Name</span>
+                <span>Amount</span>
+                <span>Date</span>
+                <span>Proof</span>
+                <span>Actions</span>
+              </div>
+              {filteredContributions.map((contrib) => (
+                <div key={contrib.id} className="contrib-row">
+                  {editingContribution === contrib.id ? (
+                    <>
+                      <span>{contrib.memberName}</span>
+                      <input
+                        type="number"
+                        value={editContribAmount}
+                        onChange={(e) => setEditContribAmount(e.target.value)}
+                        className="edit-amount-input"
+                      />
+                      <span>{contrib.date}</span>
+                      <div className="edit-proof">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) =>
+                            setEditContribImage(e.target.files[0])
+                          }
+                          className="edit-file-input"
+                        />
+                      </div>
+                      <div className="contrib-actions">
+                        <button
+                          onClick={() => handleEditContribution(contrib.id)}
+                          className="btn-save"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingContribution(null);
+                            setEditContribAmount("");
+                            setEditContribImage(null);
+                          }}
+                          className="btn-cancel"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span className="contrib-name">{contrib.memberName}</span>
+                      <span className="contrib-amount">₱{contrib.amount}</span>
+                      <span className="contrib-date">{contrib.date}</span>
+                      <span className="contrib-proof">
+                        {contrib.proofOfPayment ? (
+                          <a
+                            href={contrib.proofOfPayment}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            📎
+                          </a>
+                        ) : (
+                          <span className="no-proof">-</span>
+                        )}
+                      </span>
+                      <div className="contrib-actions">
+                        <button
+                          onClick={() => {
+                            setEditingContribution(contrib.id);
+                            setEditContribAmount(String(contrib.amount));
+                          }}
+                          className="btn-edit"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() =>
+                            handleDeleteContribution(
+                              contrib.id,
+                              contrib.memberName,
+                              contrib.amount
+                            )
+                          }
+                          className="btn-delete"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card total-card">
+        <h2>💵 Total Savings</h2>
+        <div className="total-amount">₱{totalSavings.toLocaleString()}</div>
+      </div>
+
+      <div className="card add-contribution-card">
+        <h2>💳 Add Contribution</h2>
         <form onSubmit={handleAddContribution}>
           <select
             value={selectedMember}
@@ -386,6 +604,30 @@ function App() {
             ))}
           </select>
 
+          <div className="quick-amounts">
+            <button
+              type="button"
+              onClick={() => handleQuickAmount(500)}
+              className="quick-btn"
+            >
+              ₱500
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickAmount(1000)}
+              className="quick-btn"
+            >
+              ₱1000
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickAmount(1500)}
+              className="quick-btn"
+            >
+              ₱1500
+            </button>
+          </div>
+
           <input
             type="number"
             placeholder="Amount (Expected: ₱500)"
@@ -394,15 +636,22 @@ function App() {
             disabled={loading}
           />
 
-          <div>
-            <label>Proof of Payment (optional):</label>
+          <input
+            type="date"
+            value={contributionDate}
+            onChange={(e) => setContributionDate(e.target.value)}
+            disabled={loading}
+          />
+
+          <div className="file-input-wrapper">
+            <label>📷 Proof of Payment (optional)</label>
             <input
               type="file"
               accept="image/*"
               onChange={handleImageChange}
               disabled={loading}
             />
-            {imageFile && <p>Selected: {imageFile.name}</p>}
+            {imageFile && <p className="file-selected">✓ {imageFile.name}</p>}
           </div>
 
           <button type="submit" disabled={loading}>
@@ -415,43 +664,86 @@ function App() {
         </form>
       </div>
 
-      <h2>Members ({members.length})</h2>
-      {members.length === 0 ? (
-        <p>No members yet. Add your first member above!</p>
-      ) : (
-        <ul>
-          {members.map((member) => (
-            <li key={member.id}>
-              {member.name} - Total Contributed: ₱{getMemberTotal(member.name)}
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="card monthly-report-card">
+        <h2>📊 Monthly Report</h2>
+        <div className="month-selector">
+          <select
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+          >
+            {monthNames.map((month, index) => (
+              <option key={index} value={index + 1}>
+                {month}
+              </option>
+            ))}
+          </select>
 
-      <h2>Recent Contributions</h2>
-      {contributions.length === 0 ? (
-        <p>No contributions yet</p>
-      ) : (
-        <ul>
-          {contributions.map((contrib) => (
-            <li key={contrib.id}>
-              {contrib.memberName} contributed ₱{contrib.amount} on{" "}
-              {contrib.date}
-              {contrib.proofOfPayment && (
-                <div>
-                  <a
-                    href={contrib.proofOfPayment}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    View Proof of Payment
-                  </a>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+          <select
+            value={selectedYear}
+            onChange={(e) => setSelectedYear(e.target.value)}
+          >
+            {[2024, 2025, 2026].map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {monthlyReport && (
+          <div className="scrollable-content">
+            <div className="summary-info">
+              <div className="summary-item">
+                <span>Expected</span>
+                <strong>₱{monthlyReport.expectedTotal}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Collected</span>
+                <strong>₱{monthlyReport.totalCollected}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Shortfall</span>
+                <strong>
+                  ₱{monthlyReport.expectedTotal - monthlyReport.totalCollected}
+                </strong>
+              </div>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Paid</th>
+                  <th>Balance</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyReport.memberReports.map((report, index) => (
+                  <tr key={index}>
+                    <td>{report.name}</td>
+                    <td>₱{report.paidAmount}</td>
+                    <td>₱{report.balance}</td>
+                    <td>
+                      <span
+                        className={`status-badge status-${
+                          report.status === "Paid Full"
+                            ? "paid"
+                            : report.status === "Partial"
+                            ? "partial"
+                            : "unpaid"
+                        }`}
+                      >
+                        {report.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
