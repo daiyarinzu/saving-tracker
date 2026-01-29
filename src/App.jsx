@@ -498,8 +498,8 @@ function App() {
           <div className="logo">
             <Wallet size={32} />
             <div>
-              <h1>Group Savings Tracker</h1>
-              <p>Track contributions for your group staycation fund</p>
+              <h1>Group#123456 Savings</h1>
+              <p>Para dili hantod sabot ang laag!</p>
             </div>
           </div>
           <button

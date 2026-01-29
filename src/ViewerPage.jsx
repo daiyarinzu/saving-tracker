@@ -192,7 +192,7 @@ function ViewerPage() {
           <div className="logo">
             <Wallet size={32} />
             <div>
-              <h1>Group Savings Tracker</h1>
+              <h1>Group#123456 Savings</h1>
               <p>View-only mode</p>
             </div>
           </div>
