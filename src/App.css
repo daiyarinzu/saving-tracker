@@ -1240,3 +1240,164 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   background: rgba(255, 255, 255, 0.25);
   transform: scale(1.05);
 }
+
+/* ========================================
+   Mobile Responsive - Viewer Page
+   ======================================== */
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .logo {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .logo h1 {
+    font-size: 1.3rem;
+  }
+
+  .viewer-badge {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
+
+  .main-content,
+  .viewer-content {
+    grid-template-columns: 1fr;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .left-column,
+  .middle-column,
+  .right-column {
+    width: 100%;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .card.full-height {
+    min-height: 300px;
+    max-height: 400px;
+  }
+
+  .total-amount {
+    font-size: 2rem;
+  }
+
+  .generate-report-btn {
+    width: 100%;
+    padding: 14px 20px;
+  }
+
+  .filter-section {
+    gap: 8px;
+  }
+
+  .date-filters {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .date-filters span {
+    display: none;
+  }
+
+  .member-item,
+  .contrib-item {
+    padding: 12px;
+  }
+
+  .contrib-item {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .contrib-meta {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  /* Modal Mobile */
+  .modal-content {
+    width: 95%;
+    max-height: 90vh;
+    margin: 16px;
+  }
+
+  .modal-header {
+    padding: 16px;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .month-selector {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .summary-cards {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .summary-card {
+    padding: 12px;
+  }
+
+  .summary-value {
+    font-size: 1.2rem;
+  }
+
+  .report-table th,
+  .report-table td {
+    padding: 10px 8px;
+    font-size: 0.85rem;
+  }
+
+  .status-badge {
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+}
+
+/* Extra small devices */
+@media (max-width: 480px) {
+  .header {
+    padding: 12px;
+  }
+
+  .logo h1 {
+    font-size: 1.1rem;
+  }
+
+  .logo p {
+    font-size: 0.75rem;
+  }
+
+  .total-amount {
+    font-size: 1.75rem;
+  }
+
+  .card-header h2 {
+    font-size: 1rem;
+  }
+
+  .member-name,
+  .contrib-name {
+    font-size: 0.9rem;
+  }
+
+  .member-total,
+  .contrib-amount {
+    font-size: 0.85rem;
+  }
+}
